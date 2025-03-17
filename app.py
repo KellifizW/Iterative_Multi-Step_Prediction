@@ -36,7 +36,7 @@ class Attention(Layer):
     def compute_output_shape(self, input_shape):
         return (input_shape[0], input_shape[-1])
 
-# 構建模型（確保正確返回模型）
+# 構建模型
 def build_model(input_shape):
     inputs = Input(shape=input_shape)
     x = Conv1D(filters=128, kernel_size=1, activation='relu')(inputs)
@@ -68,7 +68,7 @@ def preprocess_data(data, timesteps):
 
     X = np.array(X)
     X_last = X[-1:]  # 最後一個窗口用於預測
-    return X, X_last, scaler_features, scaler_target, data.index[-1]
+    return X, X_last, scaler_features, scaler_target, data.index[-1], features  # 返回 features
 
 # 預測未來 5 天
 def forecast_next_5_days(model, X_last, scaler_features, scaler_target, last_features, timesteps, forecast_days=5):
@@ -122,7 +122,7 @@ def main():
 
             # 數據預處理
             timesteps = 60
-            X, X_last, scaler_features, scaler_target, last_date = preprocess_data(data, timesteps)
+            X, X_last, scaler_features, scaler_target, last_date, features = preprocess_data(data, timesteps)
             y = scaler_target.transform(data[['Close']])[timesteps:]
 
             # 訓練模型
