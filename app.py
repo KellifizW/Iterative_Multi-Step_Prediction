@@ -9,15 +9,45 @@ from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
-# 自訂 Attention 層（保持不變）
+# 自訂 Attention 層
 class Attention(Layer):
-    # ... (與原程式相同)
-    pass
+    def __init__(self):
+        super(Attention, self).__init__()
 
-# 構建模型
+    def build(self, input_shape):
+        self.W_h = self.add_weight(name='attention_W_h', shape=(input_shape[-1], input_shape[-1]),
+                                   initializer='random_normal', trainable=True)
+        self.W_a = self.add_weight(name='attention_W_a', shape=(input_shape[-1], 1),
+                                   initializer='random_normal', trainable=True)
+        self.b_h = self.add_weight(name='attention_b_h', shape=(input_shape[-1], 1),
+                                   initializer='zeros', trainable=True)
+        super(Attention, self).build(input_shape)
+
+    def call(self, inputs):
+        intermediate = tanh(dot(inputs, self.W_h) + self.b_h)
+        e = dot(intermediate, self.W_a)
+        e = tf.squeeze(e, axis=-1)
+        alpha = softmax(e, axis=1)
+        alpha = tf.expand_dims(alpha, axis=-1)
+        context = inputs * alpha
+        output = K_sum(context, axis=1)
+        return output
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[-1])
+
+# 構建模型（確保正確返回模型）
 def build_model(input_shape):
-    # ... (與原程式相同)
-    pass
+    inputs = Input(shape=input_shape)
+    x = Conv1D(filters=128, kernel_size=1, activation='relu')(inputs)
+    x = MaxPooling1D(pool_size=1)(x)
+    x = Bidirectional(LSTM(units=128, activation='tanh', return_sequences=True))(x)
+    x = Attention()(x)
+    x = Dropout(0.01)(x)
+    outputs = Dense(1)(x)
+    model = tf.keras.Model(inputs=inputs, outputs=outputs)
+    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+    return model
 
 # 數據預處理與預測準備
 def preprocess_data(data, timesteps):
@@ -50,9 +80,9 @@ def forecast_next_5_days(model, X_last, scaler_features, scaler_target, last_fea
         pred_price = scaler_target.inverse_transform(pred)[0, 0]
         forecast.append(pred_price)
 
-        # 更新輸入數據：移除最早一天，加入新預測
+        # 更新輸入數據
         new_features = np.array([[
-            last_features['Yesterday_Close'][-1],  # 昨日收盤價
+            last_features['Yesterday_Close'].iloc[-1],  # 昨日收盤價
             pred_price,  # 假設開盤價=預測價
             pred_price,  # 假設最高價=預測價
             pred_price,  # 假設最低價=預測價
@@ -60,7 +90,7 @@ def forecast_next_5_days(model, X_last, scaler_features, scaler_target, last_fea
         ]])
         new_scaled_features = scaler_features.transform(new_features)
         current_input = np.append(current_input[:, 1:, :], new_scaled_features.reshape(1, 1, -1), axis=1)
-        last_features['Yesterday_Close'][-1] = pred_price
+        last_features['Yesterday_Close'].iloc[-1] = pred_price
 
     return forecast
 
@@ -97,6 +127,9 @@ def main():
 
             # 訓練模型
             model = build_model(input_shape=(timesteps, X.shape[2]))
+            if model is None:
+                st.error("模型創建失敗，請檢查 build_model 函數！")
+                return
             model.fit(X, y, epochs=200, batch_size=256, validation_split=0.1, verbose=0)
 
             # 預測未來 5 天
