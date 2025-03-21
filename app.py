@@ -53,14 +53,13 @@ class Attention(Layer):
     def compute_output_shape(self, input_shape):
         return (input_shape[0], input_shape[-1])
 
-# 修改模型以輸出多天序列
 def build_model(input_shape, output_steps=5, model_type="original", learning_rate=0.001):
     if model_type == "lstm_simple":
         model = Sequential()
         model.add(LSTM(150, activation='relu', input_shape=input_shape, return_sequences=False))
         model.add(Dropout(0.01))
         model.add(Dense(32, activation='relu'))
-        model.add(Dense(output_steps))  # 輸出未來 output_steps 天的價格
+        model.add(Dense(output_steps))
         model.compile(optimizer=Adam(learning_rate=learning_rate), loss=tf.keras.losses.MeanSquaredError(), metrics=['mae'])
     else:
         inputs = Input(shape=input_shape)
@@ -68,12 +67,11 @@ def build_model(input_shape, output_steps=5, model_type="original", learning_rat
         x = Bidirectional(LSTM(units=128, activation='tanh', return_sequences=True))(x)
         x = Dropout(0.01)(x)
         x = Attention()(x)
-        outputs = Dense(output_steps)(x)  # 輸出未來 output_steps 天的價格
+        outputs = Dense(output_steps)(x)
         model = tf.keras.Model(inputs=inputs, outputs=outputs)
         model.compile(optimizer=Adam(learning_rate=learning_rate), loss=tf.keras.losses.MeanSquaredError(), metrics=['mae'])
     return model
 
-# 修改預處理函數以生成多天序列目標
 def preprocess_data(data, timesteps, predict_days=5, train_split_ratio=0.7, scaler_features=None, scaler_target=None, is_training=True):
     if data.empty:
         raise ValueError("輸入數據為空，無法進行預處理。請檢查數據來源或日期範圍。")
@@ -103,7 +101,6 @@ def preprocess_data(data, timesteps, predict_days=5, train_split_ratio=0.7, scal
     X, y = [], []
     for i in range(total_samples):
         X.append(scaled_features[i:i + timesteps])
-        # 生成未來 predict_days 天的序列作為目標
         y.append(scaled_target[i + timesteps:i + timesteps + predict_days])
     X = np.array(X)
     y = np.array(y)
@@ -128,21 +125,18 @@ def preprocess_data(data, timesteps, predict_days=5, train_split_ratio=0.7, scal
 def predict_step(model, x):
     return model(x, training=False)
 
-# 修改回測函數以使用多天預測序列
 def backtest(data, predictions, test_dates, period_start, period_end, predict_days=5, initial_capital=100000):
     data = data.copy()
     test_size = len(predictions)
     data['Predicted'] = np.nan
     if len(test_dates) != len(predictions):
         raise ValueError(f"test_dates 長度 ({len(test_dates)}) 與 predictions 長度 ({len(predictions)}) 不一致！")
-    # 假設 predictions 是 (samples, predict_days) 形狀，取最後一天作為主要預測價格
     data.loc[test_dates, 'Predicted'] = predictions[:, -1].flatten()
     data['EMA12'] = data['Close'].ewm(span=12, adjust=False).mean()
     data['EMA26'] = data['Close'].ewm(span=26, adjust=False).mean()
     data['MACD'] = data['EMA12'] - data['EMA26']
     data['Signal'] = data['MACD'].ewm(span=9, adjust=False).mean()
     test_mask = data.index.isin(test_dates)
-    # 使用預測序列計算 MACD
     predicted_series = pd.Series(np.nan, index=data.index)
     for i, date in enumerate(test_dates):
         start_idx = data.index.get_loc(date) - predict_days + 1
@@ -450,7 +444,7 @@ def main():
                 progress_bar.progress(40)
                 status_text.text("步驟 3/5: 訓練模型...")
                 model_type_selected = "original" if model_type.startswith("original") else "lstm_simple"
-                model = build_model(input_shape=(timesteps, X_train.shape[2]), output_steps=predict_days, 
+                model = build_model(input_shape=(timesteps, X_train.shape[2]), output_steps=predict_days,
                                     model_type=model_type_selected, learning_rate=selected_learning_rate)
                 total_params = model.count_params()
                 st.write(f"模型參數總數: {total_params:,}")
@@ -479,14 +473,23 @@ def main():
                 progress_bar.progress(60)
                 status_text.text("步驟 4/5: 進行價格預測...")
                 X_test, y_test, test_dates, full_data = preprocess_data(
-                    original_data, timesteps, predict_days, train_split_ratio, scaler_features, scaler_target, is_training=False
+                    original_data, timesteps, predict_days, train_split_ratio, scaler_features, scaler_target,
+                    is_training=False
                 )
                 predictions = predict_step(model, X_test)
+                # 假設 predictions 是 (test_samples, predict_days)，直接逆轉換
                 predictions = scaler_target.inverse_transform(predictions)
-                y_test = scaler_target.inverse_transform(y_test)
+
+                # 處理 y_test 的三維形狀
+                original_shape = y_test.shape  # 例如 (test_samples, predict_days, 1)
+                y_test_2d = y_test.reshape(-1, 1)  # 轉為 (test_samples * predict_days, 1)
+                y_test = scaler_target.inverse_transform(y_test_2d)  # 逆轉換
+                y_test = y_test.reshape(original_shape)  # 恢復原始形狀
+
                 progress_bar.progress(80)
                 status_text.text("步驟 5/5: 執行回測...")
-                result = backtest(full_data, predictions, test_dates, period_start, period_end, predict_days=predict_days)
+                result = backtest(full_data, predictions, test_dates, period_start, period_end,
+                                  predict_days=predict_days)
                 if result[0] is None:
                     return
                 (
@@ -500,7 +503,7 @@ def main():
                 elapsed_time = end_time - start_time
                 period_start = pd.to_datetime(period_start)
                 period_end = pd.to_datetime(period_end)
- FULL_DATE_RANGE = pd.date_range(start=period_start, end=period_end, freq='D', tz=eastern)
+                FULL_DATE_RANGE = pd.date_range(start=period_start, end=period_end, freq='D', tz=eastern)
                 mask = (test_dates >= period_start) & (test_dates <= period_end)
                 filtered_dates = test_dates[mask]
                 if len(filtered_dates) == 0:
@@ -723,7 +726,7 @@ def main():
                 last_low = float(full_data['Low'].iloc[-1])
                 for _ in range(future_days):
                     pred = predict_step(model, last_sequence[np.newaxis, :])
-                    pred_price = scaler_target.inverse_transform(pred)[0, -1]  # 取序列最後一天作為下一天的預測
+                    pred_price = scaler_target.inverse_transform(pred)[0, -1]
                     future_predictions.append(pred_price)
                     new_features = [last_close, last_open, last_high, last_low, (last_high + last_low + pred_price) / 3]
                     scaled_new_features = scaler_features.transform([new_features])
