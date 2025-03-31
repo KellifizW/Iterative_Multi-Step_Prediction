@@ -632,8 +632,8 @@ def main():
                 st.write(f"初始資金: $100,000")
                 st.write(f"最終資金: ${results['capital_values_pred'][-1]:.2f}")
                 st.write(f"總回報率: {results['total_return_pred']:.2f}%")
-                st.write(f"最大回報率: {results['max_return_pred']:.2f}%")
-                st.write(f"最小回報率: {results['min_return_pred']:.2f}%")
+                st.write(f" Công ty cao nhất: {results['max_return_pred']:.2f}%")
+                st.write(f" Công ty thấp nhất: {results['min_return_pred']:.2f}%")
                 st.write(f"買入交易次數: {len(results['buy_signals_pred'])}")
                 st.write(f"賣出交易次數: {len(results['sell_signals_pred'])}")
             with col2:
@@ -641,8 +641,8 @@ def main():
                 st.write(f"初始資金: $100,000")
                 st.write(f"最終資金: ${results['capital_values_actual'][-1]:.2f}")
                 st.write(f"總回報率: {results['total_return_actual']:.2f}%")
-                st.write(f"最大回報率: {results['max_return_actual']:.2f}%")
-                st.write(f"最小回報率: {results['min_return_actual']:.2f}%")
+                st.write(f" Công ty cao nhất: {results['max_return_actual']:.2f}%")
+                st.write(f" Công ty thấp nhất: {results['min_return_actual']:.2f}%")
                 st.write(f"買入交易次數: {len(results['buy_signals_actual'])}")
                 st.write(f"賣出交易次數: {len(results['sell_signals_actual'])}")
             st.subheader("買賣記錄對比")
@@ -688,7 +688,7 @@ def main():
         default_end_date = current_date - timedelta(days=1)
         start_date = st.date_input("選擇歷史數據開始日期", value=default_start_date, max_value=current_date)
         end_date = st.date_input("選擇歷史數據結束日期", value=default_end_date, max_value=current_date)
-        future_days = st.selectbox("選擇未來預測天數", [1, 3, 5], index=0)  # 修改為 [1, 3, 5]
+        future_days = st.selectbox("選擇未來預測天數", [1, 3, 5], index=0)
         model_file = st.file_uploader("上載模型文件 (.keras)", type=["keras"])
         scaler_features_file = st.file_uploader("上載特徵縮放器 (.pkl)", type=["pkl"])
         scaler_target_file = st.file_uploader("上載目標縮放器 (.pkl)", type=["pkl"])
@@ -717,7 +717,13 @@ def main():
                     return
                 historical_predictions = predict_step(model, X_new)
                 historical_predictions = scaler_target.inverse_transform(historical_predictions)
-                y_new = scaler_target.inverse_transform(y_new)
+                
+                # 處理 y_new 的三維形狀
+                original_shape = y_new.shape  # 例如 (樣本數, predict_days, 1)
+                y_new_2d = y_new.reshape(-1, 1)  # 轉為 (樣本數 * predict_days, 1)
+                y_new_transformed = scaler_target.inverse_transform(y_new_2d)  # 逆轉換
+                y_new = y_new_transformed.reshape(original_shape)  # 恢復原始形狀
+
                 future_predictions = []
                 last_sequence = X_new[-1].copy()
                 last_close = float(full_data['Close'].iloc[-1])
