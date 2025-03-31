@@ -688,7 +688,7 @@ def main():
         default_end_date = current_date - timedelta(days=1)
         start_date = st.date_input("選擇歷史數據開始日期", value=default_start_date, max_value=current_date)
         end_date = st.date_input("選擇歷史數據結束日期", value=default_end_date, max_value=current_date)
-        future_days = st.selectbox("選擇未來預測天數", [1, 5], index=0)
+        future_days = st.selectbox("選擇未來預測天數", [1, 3, 5], index=0)  # 修改為 [1, 3, 5]
         model_file = st.file_uploader("上載模型文件 (.keras)", type=["keras"])
         scaler_features_file = st.file_uploader("上載特徵縮放器 (.pkl)", type=["pkl"])
         scaler_target_file = st.file_uploader("上載目標縮放器 (.pkl)", type=["pkl"])
