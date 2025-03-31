@@ -632,8 +632,8 @@ def main():
                 st.write(f"初始資金: $100,000")
                 st.write(f"最終資金: ${results['capital_values_pred'][-1]:.2f}")
                 st.write(f"總回報率: {results['total_return_pred']:.2f}%")
-                st.write(f" Công ty cao nhất: {results['max_return_pred']:.2f}%")
-                st.write(f" Công ty thấp nhất: {results['min_return_pred']:.2f}%")
+                st.write(f"最高回報率: {results['max_return_pred']:.2f}%")
+                st.write(f"最低回報率: {results['min_return_pred']:.2f}%")
                 st.write(f"買入交易次數: {len(results['buy_signals_pred'])}")
                 st.write(f"賣出交易次數: {len(results['sell_signals_pred'])}")
             with col2:
@@ -641,8 +641,8 @@ def main():
                 st.write(f"初始資金: $100,000")
                 st.write(f"最終資金: ${results['capital_values_actual'][-1]:.2f}")
                 st.write(f"總回報率: {results['total_return_actual']:.2f}%")
-                st.write(f" Công ty cao nhất: {results['max_return_actual']:.2f}%")
-                st.write(f" Công ty thấp nhất: {results['min_return_actual']:.2f}%")
+                st.write(f"最高回報率: {results['max_return_actual']:.2f}%")
+                st.write(f"最低回報率: {results['min_return_actual']:.2f}%")
                 st.write(f"買入交易次數: {len(results['buy_signals_actual'])}")
                 st.write(f"賣出交易次數: {len(results['sell_signals_actual'])}")
             st.subheader("買賣記錄對比")
@@ -693,7 +693,7 @@ def main():
         scaler_features_file = st.file_uploader("上載特徵縮放器 (.pkl)", type=["pkl"])
         scaler_target_file = st.file_uploader("上載目標縮放器 (.pkl)", type=["pkl"])
 
-        if st.button("運行預測") and model_file and scaler_features_file and scaler_target_file:
+        if st.button("運行%]預測") and model_file and scaler_features_file and scaler_target_file:
             with st.spinner("正在載入模型並預測（包括未來預測）..."):
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".keras") as tmp_model:
                     tmp_model.write(model_file.read())
@@ -740,7 +740,10 @@ def main():
                     last_sequence[-1] = scaled_new_features[0]
                     last_close = pred_price
                 all_dates = np.concatenate([new_dates, pd.date_range(start=end_date + timedelta(days=1), periods=future_days, tz=eastern)])
-                all_actual = np.concatenate([full_data.loc[new_dates, 'Close'].values, [np.nan] * future_days])
+                # 確保所有陣列是一維的
+                historical_close = full_data.loc[new_dates, 'Close'].values.flatten()
+                future_nan = np.array([np.nan] * future_days)
+                all_actual = np.concatenate([historical_close, future_nan])
                 all_predicted = np.concatenate([historical_predictions[:, -1], future_predictions])
                 fig_price = create_price_comparison_chart(all_dates, all_actual, all_predicted, stock_symbol,
                                                          f"歷史與未來預測股價比較 ({start_date.strftime('%Y-%m-%d')} 至 {all_dates[-1].strftime('%Y-%m-%d')})")
